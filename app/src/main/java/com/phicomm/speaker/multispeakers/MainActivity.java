@@ -9,6 +9,9 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.TextView;
 
+import static android.media.AudioAttributes.USAGE_MEDIA;
+import static android.media.AudioManager.STREAM_MUSIC;
+
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
   AudioTrack audioTrack;
@@ -21,9 +24,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     textView.setOnClickListener(this);
     int minBufferSize = AudioTrack.getMinBufferSize(441000, AudioFormat.CHANNEL_OUT_STEREO,
         AudioFormat.ENCODING_PCM_16BIT);
+    AudioAttributes attributes = new AudioAttributes.Builder().setUsage(USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+        .setLegacyStreamType(STREAM_MUSIC)
+        .build();
 
-    audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, 441000, AudioFormat.CHANNEL_OUT_STEREO,
-        AudioFormat.ENCODING_PCM_16BIT, minBufferSize, AudioTrack.MODE_STREAM);
+    AudioFormat audioFormat = new AudioFormat.Builder().setSampleRate(441000)
+        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+        .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+        .build();
+
+    audioTrack = new AudioTrack(attributes, audioFormat, minBufferSize, AudioTrack.MODE_STREAM,
+        AudioManager.AUDIO_SESSION_ID_GENERATE);
+    audioTrack.play();
   }
 
   @Override public void onClick(View v) {
