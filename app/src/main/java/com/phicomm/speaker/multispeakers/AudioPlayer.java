@@ -89,12 +89,12 @@ public class AudioPlayer {
 
 
             //Just to retrieve the duration; TODO
-            int videoTrackIndex = selectVideoTrack(extractor);
-            if (videoTrackIndex < 0) {
-                throw new RuntimeException("No video track found in " + mSourceFile);
-            }
-            MediaFormat videoTrackFormat = extractor.getTrackFormat(videoTrackIndex);
-            mDuration = videoTrackFormat.getLong(MediaFormat.KEY_DURATION);
+//            int videoTrackIndex = selectVideoTrack(extractor);
+//            if (videoTrackIndex < 0) {
+//                throw new RuntimeException("No video track found in " + mSourceFile);
+//            }
+//            MediaFormat videoTrackFormat = extractor.getTrackFormat(videoTrackIndex);
+//            mDuration = videoTrackFormat.getLong(MediaFormat.KEY_DURATION);
 
             int audioTrackIndex = selectAudioTrack(extractor);
             if (audioTrackIndex < 0) {
@@ -407,7 +407,7 @@ public class AudioPlayer {
         private static final int MSG_PLAY_STOPPED = 0;
 
         private AudioPlayer mAudioPlayer;
-        //private MoviePlayer.PlayerFeedback mFeedback;
+        private MoviePlayer.PlayerFeedback mFeedback;
         private boolean mDoLoop;
         private Thread mThread;
         private LocalHandler mLocalHandler;
@@ -418,11 +418,11 @@ public class AudioPlayer {
         /**
          * Prepares new AudioPlayTask.
          *  @param videoPlayer The player object, configured with control and output.
-         //* @param feedback UI feedback object.
+         * @param feedback UI feedback object.
          */
-        public AudioPlayTask(AudioPlayer videoPlayer/*, MoviePlayer.PlayerFeedback feedback*/) {
+        public AudioPlayTask(AudioPlayer videoPlayer, MoviePlayer.PlayerFeedback feedback) {
             mAudioPlayer = videoPlayer;
-            //mFeedback = feedback;
+            mFeedback = feedback;
 
             mLocalHandler = new LocalHandler();
         }
@@ -483,8 +483,8 @@ public class AudioPlayer {
                 }
 
                 // Send message through Handler so it runs on the right thread.
-                //mLocalHandler.sendMessage(
-                //        mLocalHandler.obtainMessage(MSG_PLAY_STOPPED, mFeedback));
+                mLocalHandler.sendMessage(
+                        mLocalHandler.obtainMessage(MSG_PLAY_STOPPED, mFeedback));
             }
         }
 
@@ -495,8 +495,8 @@ public class AudioPlayer {
 
                 switch (what) {
                     case MSG_PLAY_STOPPED:
-                        //MoviePlayer.PlayerFeedback fb = (MoviePlayer.PlayerFeedback) msg.obj;
-                        //fb.playbackStopped();
+                        MoviePlayer.PlayerFeedback fb = (MoviePlayer.PlayerFeedback) msg.obj;
+                        fb.playbackStopped();
                         break;
                     default:
                         throw new RuntimeException("Unknown msg " + what);

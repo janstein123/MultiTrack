@@ -32,7 +32,7 @@ import android.util.Log;
  * Thread restrictions are noted in the method descriptions.  The FrameCallback overrides should
  * only be called from the MoviePlayer.
  */
-public class SpeedControlCallback /*implements MoviePlayer.FrameCallback */{
+public class SpeedControlCallback implements MoviePlayer.FrameCallback {
     private static final String TAG = "SpeedControlCallback";
     private static final boolean CHECK_SLEEP_TIME = false;
     private static final boolean VERBOSE = false;
@@ -60,7 +60,7 @@ public class SpeedControlCallback /*implements MoviePlayer.FrameCallback */{
     // runs on decode thread
     /**
      */
-    //@Override
+    @Override
     public boolean preRender(long presentationTimeUsec, long durationUsec, MediaExtractor extractor) {
         // For the first frame, we grab the presentation time from the video
         // and the current monotonic clock time.  For subsequent frames, we
@@ -202,13 +202,13 @@ public class SpeedControlCallback /*implements MoviePlayer.FrameCallback */{
     }
 
     // runs on decode thread
-    //@Override
+    @Override
     public void postRender() {
         if(VERBOSE)
             Log.d(TAG, "postRender..");
     }
 
-    //@Override
+    @Override
     public void loopReset() {
 
         Log.d(TAG, "loopReset. Thread=" + Thread.currentThread().getName());

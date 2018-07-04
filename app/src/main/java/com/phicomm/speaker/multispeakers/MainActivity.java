@@ -1,22 +1,43 @@
 package com.phicomm.speaker.multispeakers;
 
-import android.media.AudioTrack;
+import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
-import android.os.Bundle;
-import android.os.Environment;
+import android.os.*;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, Handler.Callback {
 
     private static final String TAG = "multi-speaker";
-    AudioTrack audioTrack;
+    private static final int MSG_BROADCAST_RAW_DATA = 0x1001;
+    public static final int MSG_DECODE_AUDIO = 0x1002;
+
+    private AudioPlayer mAudioPlayer;
+    private Handler mHandler = new Handler();
+
+    private Handler mBroadcastHandler;
+    private Handler mDecodeHandler;
+    private HandlerThread mBroadcastThread;
+    private HandlerThread mDecodeThread;
+
+
+    ExecutorService mExecutor = Executors.newCachedThreadPool();
+
+    private TCPHelper mTCPHelper;
+    private UDPHelper mUDPHelper;
+
+    private RawDataPlayer mPlayer;
+
+    private boolean tcp = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,22 +45,48 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
         TextView textView = findViewById(R.id.play);
         textView.setOnClickListener(this);
-        //int minBufferSize = AudioTrack.getMinBufferSize(44100, AudioFormat.CHANNEL_OUT_STEREO,
-        //    AudioFormat.ENCODING_PCM_16BIT);
-        //AudioAttributes attributes = new AudioAttributes.Builder().setUsage(USAGE_MEDIA)
-        //    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-        //    .setLegacyStreamType(STREAM_MUSIC)
-        //    .build();
-        //
-        //AudioFormat audioFormat = new AudioFormat.Builder().setSampleRate(44100)
-        //    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-        //    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-        //    .build();
-        //
-        //audioTrack = new AudioTrack(attributes, audioFormat, minBufferSize, AudioTrack.MODE_STREAM,
-        //    AudioManager.AUDIO_SESSION_ID_GENERATE);
-        //audioTrack.play();
-        createMediaExtractor();
+
+        mBroadcastThread = new HandlerThread("broadcast");
+        mBroadcastThread.start();
+
+        mBroadcastHandler = new Handler(mBroadcastThread.getLooper(), this);
+
+        mDecodeThread = new HandlerThread("decode");
+        mDecodeThread.start();
+        mDecodeHandler = new Handler(mDecodeThread.getLooper(), this);
+
+
+//        doWithAudioPlayer();
+        if (tcp) {
+            mTCPHelper = TCPHelper.getInstance();
+            mTCPHelper.acceptClient();
+            mTCPHelper.setHandler(mDecodeHandler);
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    mTCPHelper.connectServer("192.168.199.215");
+                }
+            }, 3000);
+
+            mDecodeHandler.sendEmptyMessageDelayed(MSG_DECODE_AUDIO, 30000);
+        } else {
+            mUDPHelper = UDPHelper.getInstance();
+            mDecodeHandler.sendEmptyMessageDelayed(MSG_DECODE_AUDIO, 1000);
+        }
+    }
+
+
+    private void doWithAudioPlayer() {
+        String path = Environment.getExternalStorageDirectory() + "/lover.mp3";
+        File file = new File(path);
+        if (file.exists()) {
+            try {
+                mAudioPlayer = new AudioPlayer(file, null);
+                mAudioPlayer.play();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
@@ -49,29 +96,146 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void createMediaExtractor() {
         MediaExtractor mediaExtractor = new MediaExtractor();
-        String path = Environment.getExternalStorageDirectory() + "/lover.mp3";
+        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
 
+        String path = Environment.getExternalStorageDirectory() + "/qinghuaci.mp3";
+//        String path = Environment.getExternalStorageDirectory() + "/hongdou.mp3";
+//        String path = Environment.getExternalStorageDirectory() + "/lover.mp3";
+//        String path = "/system/unisound/ringing/happiness.mp3";
+        String mime = null;
+        MediaFormat trackFormat = null;
         try {
             mediaExtractor.setDataSource(path);
             int trackCount = mediaExtractor.getTrackCount();
             Log.d(TAG, "track count:" + trackCount);
             for (int i = 0; i < trackCount; i++) {
-                MediaFormat trackFormat = mediaExtractor.getTrackFormat(i);
-                Log.d(TAG, "" + trackFormat);
-                mediaExtractor.selectTrack(i);
+                trackFormat = mediaExtractor.getTrackFormat(i);
+                Log.d(TAG, "trackFormat:" + trackFormat);
+                mime = trackFormat.getString(MediaFormat.KEY_MIME);
+                if (mime.startsWith("audio/")) {
+                    mediaExtractor.selectTrack(i);
+                }
                 break;
             }
-            ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
-            int size;
-            while ((size = mediaExtractor.readSampleData(byteBuffer, 0)) >= 0) {
-                int sampleTrackIndex = mediaExtractor.getSampleTrackIndex();
-                long sampleTime = mediaExtractor.getSampleTime();
-                Log.d(TAG, "size:" + size + ", sampleTrackIndex:" + sampleTrackIndex + ", sampleTime:" + sampleTime);
+            int size = 0;
+            int N = 1;
+            byte[][] nChunks = new byte[N][];
+            if (mime != null && trackFormat != null) {
+                MediaCodec mediaCodec = MediaCodec.createDecoderByType(mime);
+                mediaCodec.configure(trackFormat, null, null, 0);
+                mediaCodec.start();
+                int i = 2;
+                do {
+                    int inputBufferIndex = mediaCodec.dequeueInputBuffer(100000);
+                    Log.d(TAG, "inputBufferIndex:" + inputBufferIndex);
+                    if (inputBufferIndex != -1) {
+                        ByteBuffer inputBuffer = mediaCodec.getInputBuffer(inputBufferIndex);
+                        if (inputBuffer != null) {
+                            size = mediaExtractor.readSampleData(inputBuffer, 0);
+                            long presentationTimeUs = mediaExtractor.getSampleTime();
+                            mediaExtractor.advance();
+                            Log.d(TAG, "size:" + size + ", presentationTimeUs:" + presentationTimeUs);
+                            if (size > 0) {
+                                mediaCodec.queueInputBuffer(inputBufferIndex, 0, size, presentationTimeUs, 0);
+                                int index = mediaCodec.dequeueOutputBuffer(bufferInfo, 100000);
+                                Log.d(TAG, "outputBufferIndex:" + index);
+                                Log.d(TAG, "bufferInfo:" + bufferInfo.size + ", " + bufferInfo.offset + ", " + bufferInfo.presentationTimeUs);
+                                if (index >= 0) {
+                                    ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(index);
+                                    nChunks[i % N] = new byte[bufferInfo.size];
+                                    outputBuffer.get(nChunks[i % N]);
 
-                mediaExtractor.advance();
+                                    i++;
+                                    if (i % N == 0) {
+                                        int len = 0;
+                                        for (int j = 0; j < N; j++) {
+                                            len += nChunks[j].length;
+                                        }
+                                        byte[] bigChunk = new byte[len];
+
+                                        for (int j = 0; j < N; j++) {
+                                            int pos = j == 0 ? 0 : nChunks[j - 1].length;
+                                            System.arraycopy(nChunks[j], 0, bigChunk, pos, nChunks[j].length);
+                                        }
+                                        Log.d(TAG, "send raw data i:" + i + ", bigChunk size:" + bigChunk.length);
+                                        sendRawData(bigChunk, i / N);
+                                    }
+                                    outputBuffer.clear();
+                                    mediaCodec.releaseOutputBuffer(index, false);
+                                } else if (index == -2) {
+                                    MediaFormat newFormat = mediaCodec.getOutputFormat();
+                                    Log.d(TAG, "new format:" + newFormat);
+                                }
+                            } else {
+
+                            }
+                        }
+
+                    }
+                } while (size > 0);
+                Log.d(TAG, "decode end..........i=" + i);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
+
+    private void sendRawData(byte[] data, int index) {
+//        Log.d(TAG, "send raw data, length:" + data.length + ", index:" + index);
+//        for (int i = 0; ; i++) {
+//            int size = (data.length >= (i + 1) * 1024 ? 1024 : data.length - 1024 * i);
+//            byte[] block = new byte[size];
+//            System.arraycopy(data, i * 1024, block, 0, size);
+////            block[size] = (byte) (index & 0xFF);
+////            block[size + 1] = (byte) ((index >> 8) & 0xFF);
+////            block[size + 2] = (byte) ((index >> 16) & 0xFF);
+////            block[size + 3] = (byte) ((index >> 24) & 0xFF);
+////            block[size + 4] = (byte) i;
+//            Message msg = mBroadcastHandler.obtainMessage(MSG_BROADCAST_RAW_DATA, index, i, block);
+//            mBroadcastHandler.sendMessageDelayed(msg, 50);
+//            if (size < 1024) {
+//                break;
+//            }
+//        }
+        Message msg = mBroadcastHandler.obtainMessage(MSG_BROADCAST_RAW_DATA, index, -1, data);
+        mBroadcastHandler.sendMessageDelayed(msg, 0);
+
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+
+    private void playRawData(byte[] data, int size) {
+        mPlayer.write(data, 0, size);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mBroadcastThread.quitSafely();
+        mDecodeThread.quitSafely();
+    }
+
+    @Override
+    public boolean handleMessage(Message msg) {
+        if (msg.what == MSG_BROADCAST_RAW_DATA) {
+            byte[] rawData = (byte[]) msg.obj;
+            int index = msg.arg1;
+            if (tcp) {
+                mTCPHelper.sendData(rawData, index);
+            } else {
+                mUDPHelper.broadcastRawData(rawData, index);
+
+            }
+        } else if (msg.what == MSG_DECODE_AUDIO) {
+            createMediaExtractor();
+        }
+        return true;
+    }
+
 }
