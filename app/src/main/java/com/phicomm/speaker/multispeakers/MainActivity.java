@@ -8,8 +8,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
+import com.phicomm.speaker.multispeakers.otherplayer.AudioPlayer;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -18,15 +18,17 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity implements View.OnClickListener, Handler.Callback {
 
     private static final String TAG = "multi-speaker";
-    private static final int MSG_BROADCAST_RAW_DATA = 0x1001;
+    private static final int MSG_SEND_RAW_DATA = 0x1001;
     public static final int MSG_DECODE_AUDIO = 0x1002;
+
+    public static final String SERVER_IP = "192.168.2.147";
 
     private AudioPlayer mAudioPlayer;
     private Handler mHandler = new Handler();
 
-    private Handler mBroadcastHandler;
+    private Handler mSendHandler;
     private Handler mDecodeHandler;
-    private HandlerThread mBroadcastThread;
+    private HandlerThread mSendThread;
     private HandlerThread mDecodeThread;
 
 
@@ -46,10 +48,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         TextView textView = findViewById(R.id.play);
         textView.setOnClickListener(this);
 
-        mBroadcastThread = new HandlerThread("broadcast");
-        mBroadcastThread.start();
+        mSendThread = new HandlerThread("send");
+        mSendThread.start();
 
-        mBroadcastHandler = new Handler(mBroadcastThread.getLooper(), this);
+        mSendHandler = new Handler(mSendThread.getLooper(), this);
 
         mDecodeThread = new HandlerThread("decode");
         mDecodeThread.start();
@@ -64,28 +66,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             mHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    mTCPHelper.connectServer("192.168.199.215");
+                    mTCPHelper.connectServer(SERVER_IP);
                 }
             }, 3000);
 
-            mDecodeHandler.sendEmptyMessageDelayed(MSG_DECODE_AUDIO, 30000);
+            mDecodeHandler.sendEmptyMessageDelayed(MSG_DECODE_AUDIO, 20000);
         } else {
             mUDPHelper = UDPHelper.getInstance();
-            mDecodeHandler.sendEmptyMessageDelayed(MSG_DECODE_AUDIO, 1000);
-        }
-    }
 
-
-    private void doWithAudioPlayer() {
-        String path = Environment.getExternalStorageDirectory() + "/lover.mp3";
-        File file = new File(path);
-        if (file.exists()) {
-            try {
-                mAudioPlayer = new AudioPlayer(file, null);
-                mAudioPlayer.play();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            mUDPHelper.listenRawData();
+            mDecodeHandler.sendEmptyMessageDelayed(MSG_DECODE_AUDIO, 25000);
         }
     }
 
@@ -98,7 +88,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         MediaExtractor mediaExtractor = new MediaExtractor();
         MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
 
-        String path = Environment.getExternalStorageDirectory() + "/qinghuaci.mp3";
+//        String path = Environment.getExternalStorageDirectory() + "/longquan.mp3";
+        String path = Environment.getExternalStorageDirectory() + "/yinzi.mp3";
+//        String path = Environment.getExternalStorageDirectory() + "/qinghuaci.mp3";
 //        String path = Environment.getExternalStorageDirectory() + "/hongdou.mp3";
 //        String path = Environment.getExternalStorageDirectory() + "/lover.mp3";
 //        String path = "/system/unisound/ringing/happiness.mp3";
@@ -124,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 MediaCodec mediaCodec = MediaCodec.createDecoderByType(mime);
                 mediaCodec.configure(trackFormat, null, null, 0);
                 mediaCodec.start();
-                int i = 2;
+                int i = 0;
                 do {
                     int inputBufferIndex = mediaCodec.dequeueInputBuffer(100000);
                     Log.d(TAG, "inputBufferIndex:" + inputBufferIndex);
@@ -133,6 +125,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         if (inputBuffer != null) {
                             size = mediaExtractor.readSampleData(inputBuffer, 0);
                             long presentationTimeUs = mediaExtractor.getSampleTime();
+
                             mediaExtractor.advance();
                             Log.d(TAG, "size:" + size + ", presentationTimeUs:" + presentationTimeUs);
                             if (size > 0) {
@@ -191,17 +184,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 ////            block[size + 2] = (byte) ((index >> 16) & 0xFF);
 ////            block[size + 3] = (byte) ((index >> 24) & 0xFF);
 ////            block[size + 4] = (byte) i;
-//            Message msg = mBroadcastHandler.obtainMessage(MSG_BROADCAST_RAW_DATA, index, i, block);
-//            mBroadcastHandler.sendMessageDelayed(msg, 50);
+//            Message msg = mSendHandler.obtainMessage(MSG_SEND_RAW_DATA, index, i, block);
+//            mSendHandler.sendMessageDelayed(msg, 50);
 //            if (size < 1024) {
 //                break;
 //            }
 //        }
-        Message msg = mBroadcastHandler.obtainMessage(MSG_BROADCAST_RAW_DATA, index, -1, data);
-        mBroadcastHandler.sendMessageDelayed(msg, 0);
+        Message msg = mSendHandler.obtainMessage(MSG_SEND_RAW_DATA, index, -1, data);
+        mSendHandler.sendMessageDelayed(msg, 0);
 
         try {
-            Thread.sleep(10);
+            Thread.sleep(5);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -217,13 +210,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        mBroadcastThread.quitSafely();
+        mSendThread.quitSafely();
         mDecodeThread.quitSafely();
     }
 
     @Override
     public boolean handleMessage(Message msg) {
-        if (msg.what == MSG_BROADCAST_RAW_DATA) {
+        if (msg.what == MSG_SEND_RAW_DATA) {
             byte[] rawData = (byte[]) msg.obj;
             int index = msg.arg1;
             if (tcp) {

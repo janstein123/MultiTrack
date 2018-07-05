@@ -13,6 +13,7 @@ import java.io.IOException;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "Client-MainActivity";
+    public static final String SERVER_IP = "192.168.2.147";
 
     TCPHelper mTCPHelper;
 
@@ -27,32 +28,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         if (tcp) {
             mTCPHelper = TCPHelper.getInstance();
-            mTCPHelper.connectServer("192.168.199.215");
+            mTCPHelper.connectServer(SERVER_IP);
         } else {
             mUDPHelper = UDPHelper.getInstance();
             mUDPHelper.listenRawData();
         }
-//        File file = new File(Environment.getExternalStorageDirectory().getPath() + "/happiness.pcm");
-//        FileInputStream inputStream = null;
-//        try {
-//            inputStream = new FileInputStream(file);
-//
-//        byte[] data = new byte[1024];
-//        int size;
-//        while ((size = inputStream.read(data)) > 0){
-//            RawDataPlayer.getInstance().write(data, 0, size);
-//        }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        } finally {
-//            if (inputStream != null){
-//                try {
-//                    inputStream.close();
-//                } catch (IOException e) {
-//                    e.printStackTrace();
-//                }
-//            }
-//        }
-//
+
     }
 }

@@ -1,9 +1,6 @@
 package com.phicomm.speaker.multispeakers;
 
-import android.media.AudioAttributes;
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioTrack;
+import android.media.*;
 import android.util.Log;
 
 import static android.media.AudioAttributes.USAGE_MEDIA;

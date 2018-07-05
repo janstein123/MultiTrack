@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.phicomm.speaker.multispeakers;
+package com.phicomm.speaker.multispeakers.otherplayer;
 
 import android.media.AudioFormat;
 import android.media.AudioManager;
@@ -23,7 +23,6 @@ import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
-import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;

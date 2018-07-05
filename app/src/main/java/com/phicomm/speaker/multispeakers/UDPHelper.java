@@ -53,33 +53,37 @@ public class UDPHelper {
             newData[data.length + 3] = (byte) ((index >> 24) & 0xFF);
             DatagramPacket packet = new DatagramPacket(newData, newData.length, InetAddress.getByName("255.255.255.255"), 12345);
             mSocket.send(packet);
-            Thread.sleep(200);
         } catch (SocketException e) {
             e.printStackTrace();
         } catch (UnknownHostException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
         }
     }
 
     public void listenRawData() {
-        byte[] data = new byte[5120 * 10];
-        while (flag) {
-            DatagramPacket packet = new DatagramPacket(data, data.length);
-            try {
-                mSocket.receive(packet);
-                int len = packet.getLength();
-                packet.getData();
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                byte[] data = new byte[5120];
+                while (flag) {
+                    DatagramPacket packet = new DatagramPacket(data, data.length);
+                    try {
+                        mSocket.receive(packet);
+                        int len = packet.getLength();
+                        packet.getData();
 //                Log.d(TAG, data[0] + "," + data[1] + "," + data[2] + " -------- " + data[packet.getLength() - 1]);
-                int index = (data[len - 4] & 0xFF) | (data[len - 3] & 0xff) << 8 | (data[len - 2] & 0xff) << 16 | (data[len - 1] & 0xff) << 24;
-                Log.d(TAG, "listenRawData, len:" + len + ", index:" + index /*+ ", blockIndex:" + blockIndex*/);
-
-            } catch (IOException e) {
-                e.printStackTrace();
+                        int index = (data[len - 4] & 0xFF) | (data[len - 3] & 0xff) << 8 | (data[len - 2] & 0xff) << 16 | (data[len - 1] & 0xff) << 24;
+                        Log.d(TAG, "listenRawData, len:" + len + ", index:" + index /*+ ", blockIndex:" + blockIndex*/);
+                        RawDataPlayer.getInstance().write(data, 0, len - 4);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
             }
-        }
+        });
+        t.start();
+
     }
 }
